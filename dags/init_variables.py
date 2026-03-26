@@ -1,40 +1,47 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-from airflow import DAG
-from airflow.decorators import task
+import boto3
+from airflow.configuration import conf
+from airflow.decorators import dag, task
 from airflow.models import Variable
 from pendulum import datetime
 
 
-VARIABLES_FILE = Path("/vars/variables.json")
-
-
-with DAG(
-    dag_id="load_variables_from_json",
+@dag(
+    dag_id="init_variables_from_object_storage",
     start_date=datetime(2024, 1, 1),
     schedule=None,
     catchup=False,
     tags=["bootstrap", "variables"],
-) as dag:
+)
+def init_variables_from_object_storage():
 
     @task
     def load_variables():
-        if not VARIABLES_FILE.exists():
-            raise FileNotFoundError(f"File not found: {VARIABLES_FILE}")
+        bucket = conf.get("bootstrap", "bucket")
+        key = conf.get("bootstrap", "key", fallback="vars/variables.json")
+        endpoint = conf.get("bootstrap", "endpoint", fallback="https://storage.yandexcloud.net")
 
-        with VARIABLES_FILE.open("r", encoding="utf-8") as f:
-            data = json.load(f)
+        s3 = boto3.client("s3", endpoint_url=endpoint)
+        obj = s3.get_object(Bucket=bucket, Key=key)
+        data = json.loads(obj["Body"].read().decode("utf-8"))
 
         if not isinstance(data, dict):
             raise ValueError("variables.json must contain a JSON object at top level")
 
-        for key, value in data.items():
-            if isinstance(value, (dict, list)):
-                Variable.set(key=key, value=value, serialize_json=True)
+        loaded = 0
+        for var_key, var_value in data.items():
+            if isinstance(var_value, (dict, list)):
+                Variable.set(var_key, var_value, serialize_json=True)
             else:
-                Variable.set(key=key, value=value)
+                Variable.set(var_key, var_value)
+            loaded += 1
+
+        return {"loaded": loaded, "bucket": bucket, "key": key}
 
     load_variables()
+
+
+dag = init_variables_from_object_storage()
