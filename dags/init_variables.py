@@ -1,25 +1,40 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
 from airflow import DAG
 from airflow.decorators import task
-from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.models import Variable
-import json
-from datetime import datetime
+from pendulum import datetime
 
 
-S3_BUCKET_NAME = Variable.get("S3_BUCKET_NAME")
+VARIABLES_FILE = Path("/vars/variables.json")
 
-@dag(schedule=None, start_date=datetime(2026, 3, 26), tags=['admin'])
-def upload_variables():
+
+with DAG(
+    dag_id="load_variables_from_json",
+    start_date=datetime(2024, 1, 1),
+    schedule=None,
+    catchup=False,
+    tags=["bootstrap", "variables"],
+) as dag:
+
     @task
-    def load_vars():
-        s3_hook = S3Hook('yandex_s3')  # Имя connection
-        file_content = s3_hook.read_key('vars/variables.json', bucket_name="{S3_BUCKET_NAME}")
-        data = json.loads(file_content)
-        
+    def load_variables():
+        if not VARIABLES_FILE.exists():
+            raise FileNotFoundError(f"File not found: {VARIABLES_FILE}")
+
+        with VARIABLES_FILE.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if not isinstance(data, dict):
+            raise ValueError("variables.json must contain a JSON object at top level")
+
         for key, value in data.items():
-            Variable.set(key, json.dumps(value) if isinstance(value, dict) else str(value))
-        print(f"Loaded {len(data)} variables")
+            if isinstance(value, (dict, list)):
+                Variable.set(key=key, value=value, serialize_json=True)
+            else:
+                Variable.set(key=key, value=value)
 
-    load_vars()
-
-upload_variables()
+    load_variables()
