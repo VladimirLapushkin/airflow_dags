@@ -13,7 +13,7 @@ def upload_variables():
     @task
     def load_vars():
         s3_hook = S3Hook('yandex_s3')  # Имя connection
-        file_content = s3_hook.read_key('vars/variables.json', bucket_name="{S3_BUCKET_NAME})"
+        file_content = s3_hook.read_key('vars/variables.json', bucket_name="{S3_BUCKET_NAME}")
         data = json.loads(file_content)
         
         for key, value in data.items():
