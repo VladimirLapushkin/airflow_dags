@@ -1,8 +1,15 @@
+"""
+DAG: streaming_model_api
+Description: Kafka producer + streaming inference via external model API in Kubernetes.
+"""
+
 import uuid
 from datetime import datetime, timedelta
 
 from airflow import DAG
-from airflow.models import Variable
+from airflow.operators.python import PythonOperator
+from airflow.settings import Session
+from airflow.models import Connection, Variable
 from airflow.utils.trigger_rule import TriggerRule
 from airflow.providers.yandex.operators.dataproc import (
     DataprocCreateClusterOperator,
@@ -16,10 +23,15 @@ YC_SUBNET_ID = Variable.get("YC_SUBNET_ID")
 YC_SSH_PUBLIC_KEY = Variable.get("YC_SSH_PUBLIC_KEY")
 
 S3_ENDPOINT_URL = Variable.get("S3_ENDPOINT_URL")
+S3_ACCESS_KEY = Variable.get("S3_ACCESS_KEY")
+S3_SECRET_KEY = Variable.get("S3_SECRET_KEY")
 S3_BUCKET_NAME = Variable.get("S3_BUCKET_NAME")
 S3_SRC_BUCKET = f"s3a://{S3_BUCKET_NAME}/src"
 S3_VENV_ARCHIVE = f"s3a://{S3_BUCKET_NAME}/venvs/venv38.tar.gz"
-S3_DP_LOGS_BUCKET = Variable.get("S3_DP_LOGS_BUCKET", default_var=S3_BUCKET_NAME + "/airflow_logs/")
+S3_DP_LOGS_BUCKET = Variable.get(
+    "S3_DP_LOGS_BUCKET",
+    default_var=S3_BUCKET_NAME + "/airflow_logs/",
+)
 
 S3_CLEAN_PATH = Variable.get("S3_CLEAN_PATH")
 S3_CLEAN_ACCESS_KEY = Variable.get("S3_CLEAN_ACCESS_KEY")
@@ -30,13 +42,66 @@ KAFKA_TOPIC_IN = Variable.get("KAFKA_TOPIC_IN")
 KAFKA_TOPIC_OUT = Variable.get("KAFKA_TOPIC_OUT")
 KAFKA_USER = Variable.get("KAFKA_USER")
 KAFKA_PASSWORD = Variable.get("KAFKA_PASSWORD")
-KAFKA_SECURITY_PROTOCOL = Variable.get("KAFKA_SECURITY_PROTOCOL", default_var="SASL_PLAINTEXT")
-KAFKA_SASL_MECH = Variable.get("KAFKA_SASL_MECHANISM", default_var="SCRAM-SHA-256")
+KAFKA_SECURITY_PROTOCOL = Variable.get(
+    "KAFKA_SECURITY_PROTOCOL",
+    default_var="SASL_PLAINTEXT",
+)
+KAFKA_SASL_MECH = Variable.get(
+    "KAFKA_SASL_MECHANISM",
+    default_var="SCRAM-SHA-256",
+)
 
+DP_SA_AUTH_KEY_PUBLIC_KEY = Variable.get("DP_SA_AUTH_KEY_PUBLIC_KEY")
+DP_SA_JSON = Variable.get("DP_SA_JSON")
 DP_SA_ID = Variable.get("DP_SA_ID")
 
 K8S_BALANCER = Variable.get("K8S_BALANCER")
 MODEL_API_URL = f"http://{K8S_BALANCER}/predict"
+
+YC_S3_CONNECTION = Connection(
+    conn_id="yc-s3",
+    conn_type="s3",
+    host=S3_ENDPOINT_URL,
+    extra={
+        "aws_access_key_id": S3_ACCESS_KEY,
+        "aws_secret_access_key": S3_SECRET_KEY,
+        "host": S3_ENDPOINT_URL,
+    },
+)
+
+YC_SA_CONNECTION = Connection(
+    conn_id="yc-sa",
+    conn_type="yandexcloud",
+    extra={
+        "extra__yandexcloud__public_ssh_key": DP_SA_AUTH_KEY_PUBLIC_KEY,
+        "extra__yandexcloud__service_account_json": DP_SA_JSON,
+    },
+)
+
+
+def setup_airflow_connections(*connections: Connection) -> None:
+    session = Session()
+    try:
+        for conn in connections:
+            existing = (
+                session.query(Connection)
+                .filter(Connection.conn_id == conn.conn_id)
+                .first()
+            )
+            if not existing:
+                session.add(conn)
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+def run_setup_connections(**kwargs):
+    setup_airflow_connections(YC_S3_CONNECTION, YC_SA_CONNECTION)
+    return True
+
 
 default_args = {
     "owner": "Vladimir Lapushkin",
@@ -48,11 +113,17 @@ default_args = {
 with DAG(
     dag_id="streaming_model_api",
     default_args=default_args,
+    description="Kafka -> external model API -> Kafka",
     schedule=None,
     start_date=datetime(2025, 3, 27),
     catchup=False,
     tags=["mlops", "kafka", "streaming", "attack-simulation"],
 ) as dag:
+
+    setup_connections = PythonOperator(
+        task_id="setup_connections",
+        python_callable=run_setup_connections,
+    )
 
     create_cluster = DataprocCreateClusterOperator(
         task_id="dp-create",
@@ -73,7 +144,7 @@ with DAG(
         datanode_count=3,
         services=["YARN", "SPARK", "HDFS", "MAPREDUCE"],
         enable_ui_proxy=True,
-        connection_id="yc-sa",
+        connection_id=YC_SA_CONNECTION.conn_id,
     )
 
     cluster_id = "{{ ti.xcom_pull(task_ids='dp-create', key='cluster_id') }}"
@@ -86,7 +157,7 @@ with DAG(
         task_id="kafka-producer",
         cluster_id=cluster_id,
         main_python_file_uri=f"{S3_SRC_BUCKET}/kafka_producer.py",
-        connection_id="yc-sa",
+        connection_id=YC_SA_CONNECTION.conn_id,
         args=[
             "--s3-endpoint", S3_ENDPOINT_URL,
             "--access-key", S3_CLEAN_ACCESS_KEY,
@@ -115,7 +186,7 @@ with DAG(
         task_id="streaming-inference-api",
         cluster_id=cluster_id,
         main_python_file_uri=f"{S3_SRC_BUCKET}/model_api_streaming.py",
-        connection_id="yc-sa",
+        connection_id=YC_SA_CONNECTION.conn_id,
         args=[
             "--bootstrap", KAFKA_BOOTSTRAP,
             "--topic-in", KAFKA_TOPIC_IN,
@@ -154,8 +225,8 @@ with DAG(
     delete_cluster = DataprocDeleteClusterOperator(
         task_id="dp-delete",
         cluster_id=cluster_id,
-        connection_id="yc-sa",
+        connection_id=YC_SA_CONNECTION.conn_id,
         trigger_rule=TriggerRule.ALL_DONE,
     )
 
-    create_cluster >> producer_job >> inference_job >> delete_cluster
+    setup_connections >> create_cluster >> producer_job >> inference_job >> delete_cluster
