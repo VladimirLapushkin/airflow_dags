@@ -229,4 +229,5 @@ with DAG(
         trigger_rule=TriggerRule.ALL_DONE,
     )
 
-    setup_connections >> create_cluster >> producer_job >> inference_job >> delete_cluster
+    #setup_connections >> create_cluster >> producer_job >> inference_job >> delete_cluster
+    setup_connections >> create_cluster >> producer_job >> inference_job #>> delete_cluster
