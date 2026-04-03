@@ -152,7 +152,7 @@ with DAG(
     TPS = 16000
     DURATION = 30
     EXP_TAG = f"20260401_tps{TPS}"
-    MAX_OFFSET_PER_TRIGGER = 100
+    MAX_OFFSET_PER_TRIGGER = 500
     
 
     producer_job = DataprocCreatePysparkJobOperator(
