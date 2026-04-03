@@ -202,7 +202,7 @@ with DAG(
             "--sasl-mechanism", KAFKA_SASL_MECH,
             "--checkpoint", f"{S3_CLEAN_PATH.rstrip('/')}/checkpoints/model_api_streaming/",
             "--api-url", MODEL_API_URL,
-            "--max-offsets-per-trigger", MAX_OFFSET_PER_TRIGGER,
+            "--max-offsets-per-trigger", str(MAX_OFFSET_PER_TRIGGER),
             "--starting-offsets", "earliest",
             "--run-seconds", str(DURATION),
             "--exp-tag", EXP_TAG,
