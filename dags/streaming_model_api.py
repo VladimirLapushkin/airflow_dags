@@ -152,6 +152,8 @@ with DAG(
     TPS = 16000
     DURATION = 30
     EXP_TAG = f"20260401_tps{TPS}"
+    MAX_OFFSET_PER_TRIGGER = 100
+    
 
     producer_job = DataprocCreatePysparkJobOperator(
         task_id="kafka-producer",
@@ -200,6 +202,7 @@ with DAG(
             "--sasl-mechanism", KAFKA_SASL_MECH,
             "--checkpoint", f"{S3_CLEAN_PATH.rstrip('/')}/checkpoints/model_api_streaming/",
             "--api-url", MODEL_API_URL,
+            "--max-offsets-per-trigger", MAX_OFFSET_PER_TRIGGER,
             "--starting-offsets", "earliest",
             "--run-seconds", str(DURATION),
             "--exp-tag", EXP_TAG,
@@ -230,5 +233,5 @@ with DAG(
     )
 
     #setup_connections >> create_cluster >> producer_job >> inference_job >> delete_cluster
-    setup_connections >> create_cluster >> producer_job >> inference_job #>> delete_cluster
-    #setup_connections >> create_cluster >> inference_job #>> delete_cluster
+    #setup_connections >> create_cluster >> producer_job >> inference_job #>> delete_cluster
+    setup_connections >> create_cluster >> inference_job >> delete_cluster
