@@ -153,6 +153,7 @@ with DAG(
     DURATION = 30
     EXP_TAG = f"20260401_tps{TPS}"
     MAX_OFFSET_PER_TRIGGER = 5000
+    MAX_WORKERS = 16
     
 
     producer_job = DataprocCreatePysparkJobOperator(
@@ -203,6 +204,7 @@ with DAG(
             "--checkpoint", f"{S3_CLEAN_PATH.rstrip('/')}/checkpoints/model_api_streaming/",
             "--api-url", MODEL_API_URL,
             "--max-offsets-per-trigger", str(MAX_OFFSET_PER_TRIGGER),
+            "--max-workers",str(MAX_WORKERS),
             "--starting-offsets", "earliest",
             "--run-seconds", str(DURATION),
             "--exp-tag", EXP_TAG,
