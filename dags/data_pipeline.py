@@ -162,6 +162,7 @@ with DAG(
     cluster_id_tmpl = "{{ ti.xcom_pull(task_ids='spark-cluster-create-task', key='cluster_id') }}"
 
 
+
     #Pyspark prepare dataset
     etl_job = DataprocCreatePysparkJobOperator(
         cluster_id=cluster_id_tmpl,
