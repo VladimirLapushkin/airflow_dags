@@ -178,7 +178,7 @@ with DAG(
             "--lst-prefix", "data/lst/",
             "--start-code", "202603",
             "--months", "10",
-            "--output-path", "dataprep/"
+            "--output-prefix", "dataprep/"
         ],
         
         properties={
