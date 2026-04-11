@@ -240,6 +240,6 @@ with DAG(
         dag=dag,
     )
 
-    setup_connections >> create_spark_cluster >> etl_job >> delete_spark_cluster
+    setup_connections >> create_spark_cluster >> etl_job #>> delete_spark_cluster
     #setup_connections >> create_spark_cluster >> train_job >> delete_spark_cluster
     #setup_connections >> create_spark_cluster >>  etl_job >> train_job  >> delete_spark_cluster
