@@ -167,7 +167,7 @@ with DAG(
     etl_job = DataprocCreatePysparkJobOperator(
         cluster_id=cluster_id_tmpl,
         task_id="clean",
-        main_python_file_uri=f"{S3_SRC_BUCKET}/ipc_prep.py",
+        main_python_file_uri=f"{S3_SRC_BUCKET}/data_prep.py",
         connection_id=YC_SA_CONNECTION.conn_id,
         args=[
             "--s3-endpoint", S3_ENDPOINT_URL,
