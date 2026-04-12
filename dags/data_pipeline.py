@@ -198,7 +198,7 @@ with DAG(
     train_job = DataprocCreatePysparkJobOperator(
         cluster_id=cluster_id_tmpl,
         task_id="train",
-        main_python_file_uri=f"{S3_SRC_BUCKET}/train.py",
+        main_python_file_uri=f"{S3_SRC_BUCKET}/train_correct_ipc_v1.py",
         connection_id=YC_SA_CONNECTION.conn_id,
         dag=dag,
         args=[
