@@ -236,43 +236,6 @@ with DAG(
         },
     )
 
-    train_v1_reg_base = DataprocCreatePysparkJobOperator(
-        task_id="train_v1_reg_shallow",
-        cluster_id=cluster_id_tmpl,
-        connection_id=YC_SA_CONNECTION.conn_id,
-        main_python_file_uri=f"{S3_SRC_BUCKET}/train_one_model.py",
-        args=[
-            "--s3-endpoint", S3_ENDPOINT_URL,
-            "--ipc-access-key", S3_IPC_ACCESS_KEY,
-            "--ipc-secret-key", S3_IPC_SECRET_KEY,
-            "--bucket", TRAIN_BUCKET,
-            "--input-key", INPUT_KEY,
-            "--models-prefix", TRAIN_MODELS_PREFIX,
-            "--candidate-name", "v1_reg_shallow",
-            "--tracking-uri", MLFLOW_TRACKING_URI,
-            "--experiment-name", MLFLOW_EXPERIMENT_NAME,
-            "--model-name", MLFLOW_MODEL_NAME,
-            "--auto-register",
-        ],
-        properties={
-            "spark.submit.deployMode": "cluster",
-            "spark.yarn.dist.archives": f"{S3_VENV_ARCHIVE}#.venv",
-            "spark.yarn.appMasterEnv.PYSPARK_PYTHON": "./.venv/bin/python",
-            "spark.yarn.appMasterEnv.PYSPARK_DRIVER_PYTHON": "./.venv/bin/python",
-            "spark.executorEnv.PYSPARK_PYTHON": "./.venv/bin/python",
-            "spark.pyspark.python": "./.venv/bin/python",
-            "spark.pyspark.driver.python": "./.venv/bin/python",
-
-            "spark.dynamicAllocation.enabled": "false",
-            "spark.executor.instances": "9",
-            "spark.executor.cores": "2",
-            "spark.executor.memory": "6g",
-            "spark.driver.memory": "4g",
-            "spark.sql.shuffle.partitions": "96",
-
-        },
-    )
-
     train_v1_reg_shallow = DataprocCreatePysparkJobOperator(
         task_id="train_v1_reg_shallow",
         cluster_id=cluster_id_tmpl,
