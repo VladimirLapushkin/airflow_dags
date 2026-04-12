@@ -394,7 +394,7 @@ with DAG(
     #setup_connections >> create_spark_cluster >> etl_job #>> delete_spark_cluster
     #setup_connections >> create_spark_cluster >> train_job # >> delete_spark_cluster
     #setup_connections >> create_spark_cluster >>  etl_job >> train_job  >> delete_spark_cluster
-    setup_connections >> create_spark_cluster >> train_v1_reg_base >> train_v1_reg_shallow >> train_v1_reg_no_ipc_parts >> select_champion >> delete_spark_cluster
+    setup_connections >> create_spark_cluster >> train_v1_reg_base >> train_v1_reg_shallow >> train_v1_reg_no_ipc_parts >> select_champion #>> delete_spark_cluster
     # start >> create_cluster >> data_prep
     # data_prep >> [train_v1_reg_base, train_v1_reg_shallow, train_v1_reg_no_ipc_parts]
     # [train_v1_reg_base, train_v1_reg_shallow, train_v1_reg_no_ipc_parts] >> select_champion
