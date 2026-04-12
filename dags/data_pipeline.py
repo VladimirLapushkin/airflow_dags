@@ -194,6 +194,7 @@ with DAG(
     #     },
     # )
     TRAIN_BUCKET="ipc"
+    PROD_BUCKET="ipc"
     INPUT_KEY="dataprep/ipc_with_ai_202603_last_10.parquet"
     TRAIN_MODELS_PREFIX="models/correct_ipc_v1_reg/"
     MLFLOW_MODEL_NAME="correct_ipc_v1_reg"
@@ -345,8 +346,7 @@ with DAG(
 
         },
     )
-    
-    
+        
     select_champion = DataprocCreatePysparkJobOperator(
         task_id="select_champion",
         cluster_id=cluster_id_tmpl,
@@ -358,8 +358,8 @@ with DAG(
             "--ipc-secret-key", S3_IPC_SECRET_KEY,
             "--bucket", TRAIN_BUCKET,
             "--models-prefix", TRAIN_MODELS_PREFIX,
-            "--prod-bucket", PROD_BUCKET,
-            "--prod-prefix", PROD_PREFIX,
+            "--prod-bucket", PROD_BUCKET ,
+            "--prod-prefix", "prod/",
             "--tracking-uri", MLFLOW_TRACKING_URI,
             "--model-name", MLFLOW_MODEL_NAME,
             "--promote-margin", "{{ dag_run.conf.get('promote_margin', '0.0') }}",
