@@ -46,7 +46,7 @@ DP_SECURITY_GROUP_ID = Variable.get("DP_SECURITY_GROUP_ID")
 
 # MLflow переменные
 MLFLOW_TRACKING_URI = Variable.get("MLFLOW_TRACKING_URI")
-MLFLOW_EXPERIMENT_NAME = "fraud_detection"
+MLFLOW_EXPERIMENT_NAME = "correct_ipc"
 
 # Создание подключения для Object Storage
 YC_S3_CONNECTION = Connection(
@@ -193,34 +193,29 @@ with DAG(
 
     #     },
     # )
+    TRAIN_BUCKET="ipc"
+    INPUT_KEY="dataprep/ipc_with_ai_202603_last_10.parquet"
+    TRAIN_MODELS_PREFIX="models/correct_ipc_v1_reg/"
+    MLFLOW_MODEL_NAME="correct_ipc_v1_reg"
     
-    # Train
-    train_job = DataprocCreatePysparkJobOperator(
+    train_v1_reg_base = DataprocCreatePysparkJobOperator(
+        task_id="train_v1_reg_base",
         cluster_id=cluster_id_tmpl,
-        task_id="train",
-        main_python_file_uri=f"{S3_SRC_BUCKET}/train_correct_ipc_v1.py",
         connection_id=YC_SA_CONNECTION.conn_id,
-        dag=dag,
+        main_python_file_uri=f"{S3_SRC_BUCKET}/train_one_model.py",
         args=[
             "--s3-endpoint", S3_ENDPOINT_URL,
             "--ipc-access-key", S3_IPC_ACCESS_KEY,
             "--ipc-secret-key", S3_IPC_SECRET_KEY,
-            "--bucket", "ipc",
-            "--input-key", "dataprep/ipc_with_ai_202603_last_10.parquet",
-            "--models-prefix", "models/correct_ipc_v1_reg/",
+            "--bucket", TRAIN_BUCKET,
+            "--input-key", INPUT_KEY,
+            "--models-prefix", TRAIN_MODELS_PREFIX,
+            "--candidate-name", "v1_reg_base",
+            "--tracking-uri", MLFLOW_TRACKING_URI,
+            "--experiment-name", MLFLOW_EXPERIMENT_NAME,
+            "--model-name", MLFLOW_MODEL_NAME,
+            "--auto-register",
         ],
-        
-        # args=[
-        #     "--s3-endpoint", S3_ENDPOINT_URL,
-        #     "--access-key", S3_CLEAN_ACCESS_KEY,
-        #     "--secret-key", S3_CLEAN_SECRET_KEY,
-        #     "--input", f"{S3_CLEAN_PATH.rstrip('/')}/history/by_file/",
-        #     "--output", f"{S3_OUTPUT_MODEL_BUCKET}/model_{datetime.now().strftime('%Y%m%d')}",
-        #     "--tracking-uri", MLFLOW_TRACKING_URI,
-        #     "--experiment-name", MLFLOW_EXPERIMENT_NAME,
-        #     "--auto-register",  # Включаем автоматическую регистрацию лучшей модели
-        #     "--last-n", "5",
-        # ],
         properties={
             "spark.submit.deployMode": "cluster",
             "spark.yarn.dist.archives": f"{S3_VENV_ARCHIVE}#.venv",
@@ -240,6 +235,190 @@ with DAG(
         },
     )
 
+    train_v1_reg_base = DataprocCreatePysparkJobOperator(
+        task_id="train_v1_reg_shallow",
+        cluster_id=cluster_id_tmpl,
+        connection_id=YC_SA_CONNECTION.conn_id,
+        main_python_file_uri=f"{S3_SRC_BUCKET}/train_one_model.py",
+        args=[
+            "--s3-endpoint", S3_ENDPOINT_URL,
+            "--ipc-access-key", S3_IPC_ACCESS_KEY,
+            "--ipc-secret-key", S3_IPC_SECRET_KEY,
+            "--bucket", TRAIN_BUCKET,
+            "--input-key", INPUT_KEY,
+            "--models-prefix", TRAIN_MODELS_PREFIX,
+            "--candidate-name", "v1_reg_shallow",
+            "--tracking-uri", MLFLOW_TRACKING_URI,
+            "--experiment-name", MLFLOW_EXPERIMENT_NAME,
+            "--model-name", MLFLOW_MODEL_NAME,
+            "--auto-register",
+        ],
+        properties={
+            "spark.submit.deployMode": "cluster",
+            "spark.yarn.dist.archives": f"{S3_VENV_ARCHIVE}#.venv",
+            "spark.yarn.appMasterEnv.PYSPARK_PYTHON": "./.venv/bin/python",
+            "spark.yarn.appMasterEnv.PYSPARK_DRIVER_PYTHON": "./.venv/bin/python",
+            "spark.executorEnv.PYSPARK_PYTHON": "./.venv/bin/python",
+            "spark.pyspark.python": "./.venv/bin/python",
+            "spark.pyspark.driver.python": "./.venv/bin/python",
+
+            "spark.dynamicAllocation.enabled": "false",
+            "spark.executor.instances": "9",
+            "spark.executor.cores": "2",
+            "spark.executor.memory": "6g",
+            "spark.driver.memory": "4g",
+            "spark.sql.shuffle.partitions": "96",
+
+        },
+    )
+
+    train_v1_reg_shallow = DataprocCreatePysparkJobOperator(
+        task_id="train_v1_reg_shallow",
+        cluster_id=cluster_id_tmpl,
+        connection_id=YC_SA_CONNECTION.conn_id,
+        main_python_file_uri=f"{S3_SRC_BUCKET}/train_one_model.py",
+        args=[
+            "--s3-endpoint", S3_ENDPOINT_URL,
+            "--ipc-access-key", S3_IPC_ACCESS_KEY,
+            "--ipc-secret-key", S3_IPC_SECRET_KEY,
+            "--bucket", TRAIN_BUCKET,
+            "--input-key", INPUT_KEY,
+            "--models-prefix", TRAIN_MODELS_PREFIX,
+            "--candidate-name", "v1_reg_shallow",
+            "--tracking-uri", MLFLOW_TRACKING_URI,
+            "--experiment-name", MLFLOW_EXPERIMENT_NAME,
+            "--model-name", MLFLOW_MODEL_NAME,
+            "--auto-register",
+        ],
+        properties={
+            "spark.submit.deployMode": "cluster",
+            "spark.yarn.dist.archives": f"{S3_VENV_ARCHIVE}#.venv",
+            "spark.yarn.appMasterEnv.PYSPARK_PYTHON": "./.venv/bin/python",
+            "spark.yarn.appMasterEnv.PYSPARK_DRIVER_PYTHON": "./.venv/bin/python",
+            "spark.executorEnv.PYSPARK_PYTHON": "./.venv/bin/python",
+            "spark.pyspark.python": "./.venv/bin/python",
+            "spark.pyspark.driver.python": "./.venv/bin/python",
+
+            "spark.dynamicAllocation.enabled": "false",
+            "spark.executor.instances": "9",
+            "spark.executor.cores": "2",
+            "spark.executor.memory": "6g",
+            "spark.driver.memory": "4g",
+            "spark.sql.shuffle.partitions": "96",
+
+        },
+    )
+
+    train_v1_reg_no_ipc_parts = DataprocCreatePysparkJobOperator(
+        task_id="train_v1_reg_no_ipc_parts",
+        cluster_id=cluster_id_tmpl,
+        connection_id=YC_SA_CONNECTION.conn_id,
+        main_python_file_uri=f"{S3_SRC_BUCKET}/train_one_model.py",
+        args=[
+            "--s3-endpoint", S3_ENDPOINT_URL,
+            "--ipc-access-key", S3_IPC_ACCESS_KEY,
+            "--ipc-secret-key", S3_IPC_SECRET_KEY,
+            "--bucket", TRAIN_BUCKET,
+            "--input-key", INPUT_KEY,
+            "--models-prefix", TRAIN_MODELS_PREFIX,
+            "--candidate-name", "v1_reg_no_ipc_parts",
+            "--tracking-uri", MLFLOW_TRACKING_URI,
+            "--experiment-name", MLFLOW_EXPERIMENT_NAME,
+            "--model-name", MLFLOW_MODEL_NAME,
+            "--auto-register",
+        ],
+        properties={
+            "spark.submit.deployMode": "cluster",
+            "spark.yarn.dist.archives": f"{S3_VENV_ARCHIVE}#.venv",
+            "spark.yarn.appMasterEnv.PYSPARK_PYTHON": "./.venv/bin/python",
+            "spark.yarn.appMasterEnv.PYSPARK_DRIVER_PYTHON": "./.venv/bin/python",
+            "spark.executorEnv.PYSPARK_PYTHON": "./.venv/bin/python",
+            "spark.pyspark.python": "./.venv/bin/python",
+            "spark.pyspark.driver.python": "./.venv/bin/python",
+
+            "spark.dynamicAllocation.enabled": "false",
+            "spark.executor.instances": "9",
+            "spark.executor.cores": "2",
+            "spark.executor.memory": "6g",
+            "spark.driver.memory": "4g",
+            "spark.sql.shuffle.partitions": "96",
+
+        },
+    )
+    
+    
+    select_champion = DataprocCreatePysparkJobOperator(
+        task_id="select_champion",
+        cluster_id=cluster_id_tmpl,
+        connection_id=YC_SA_CONNECTION.conn_id,
+        main_python_file_uri=f"{S3_SRC_BUCKET}/select_champion.py",
+        args=[
+            "--s3-endpoint", S3_ENDPOINT_URL,
+            "--ipc-access-key", S3_IPC_ACCESS_KEY,
+            "--ipc-secret-key", S3_IPC_SECRET_KEY,
+            "--bucket", TRAIN_BUCKET,
+            "--models-prefix", TRAIN_MODELS_PREFIX,
+            "--prod-bucket", PROD_BUCKET,
+            "--prod-prefix", PROD_PREFIX,
+            "--tracking-uri", MLFLOW_TRACKING_URI,
+            "--model-name", MLFLOW_MODEL_NAME,
+            "--promote-margin", "{{ dag_run.conf.get('promote_margin', '0.0') }}",
+        ],
+        properties={
+            "spark.submit.deployMode": "cluster",
+            "spark.yarn.dist.archives": f"{S3_VENV_ARCHIVE}#.venv",
+            "spark.yarn.appMasterEnv.PYSPARK_PYTHON": "./.venv/bin/python",
+            "spark.yarn.appMasterEnv.PYSPARK_DRIVER_PYTHON": "./.venv/bin/python",
+            "spark.executorEnv.PYSPARK_PYTHON": "./.venv/bin/python",
+            "spark.pyspark.python": "./.venv/bin/python",
+            "spark.pyspark.driver.python": "./.venv/bin/python",
+
+            "spark.dynamicAllocation.enabled": "false",
+            "spark.executor.instances": "9",
+            "spark.executor.cores": "2",
+            "spark.executor.memory": "6g",
+            "spark.driver.memory": "4g",
+            "spark.sql.shuffle.partitions": "96",
+
+        },
+    )
+    
+       
+    # Train
+    # train_job = DataprocCreatePysparkJobOperator(
+    #     cluster_id=cluster_id_tmpl,
+    #     task_id="train",
+    #     main_python_file_uri=f"{S3_SRC_BUCKET}/train_correct_ipc_v1.py",
+    #     connection_id=YC_SA_CONNECTION.conn_id,
+    #     dag=dag,
+    #     args=[
+    #         "--s3-endpoint", S3_ENDPOINT_URL,
+    #         "--ipc-access-key", S3_IPC_ACCESS_KEY,
+    #         "--ipc-secret-key", S3_IPC_SECRET_KEY,
+    #         "--bucket", "ipc",
+    #         "--input-key", "dataprep/ipc_with_ai_202603_last_10.parquet",
+    #         "--models-prefix", "models/correct_ipc_v1_reg/",
+    #     ],
+    
+    #     properties={
+    #         "spark.submit.deployMode": "cluster",
+    #         "spark.yarn.dist.archives": f"{S3_VENV_ARCHIVE}#.venv",
+    #         "spark.yarn.appMasterEnv.PYSPARK_PYTHON": "./.venv/bin/python",
+    #         "spark.yarn.appMasterEnv.PYSPARK_DRIVER_PYTHON": "./.venv/bin/python",
+    #         "spark.executorEnv.PYSPARK_PYTHON": "./.venv/bin/python",
+    #         "spark.pyspark.python": "./.venv/bin/python",
+    #         "spark.pyspark.driver.python": "./.venv/bin/python",
+
+    #         "spark.dynamicAllocation.enabled": "false",
+    #         "spark.executor.instances": "9",
+    #         "spark.executor.cores": "2",
+    #         "spark.executor.memory": "6g",
+    #         "spark.driver.memory": "4g",
+    #         "spark.sql.shuffle.partitions": "96",
+
+    #     },
+    # )
+
     # Удаление Dataproc кластера
     delete_spark_cluster = DataprocDeleteClusterOperator(
         task_id="spark-cluster-delete-task",
@@ -250,5 +429,10 @@ with DAG(
     )
 
     #setup_connections >> create_spark_cluster >> etl_job #>> delete_spark_cluster
-    setup_connections >> create_spark_cluster >> train_job # >> delete_spark_cluster
+    #setup_connections >> create_spark_cluster >> train_job # >> delete_spark_cluster
     #setup_connections >> create_spark_cluster >>  etl_job >> train_job  >> delete_spark_cluster
+    setup_connections >> create_spark_cluster >> train_v1_reg_base >> train_v1_reg_shallow >> train_v1_reg_no_ipc_parts >> select_champion >> delete_spark_cluster
+    # start >> create_cluster >> data_prep
+    # data_prep >> [train_v1_reg_base, train_v1_reg_shallow, train_v1_reg_no_ipc_parts]
+    # [train_v1_reg_base, train_v1_reg_shallow, train_v1_reg_no_ipc_parts] >> select_champion
+    # select_champion >> delete_cluster >> end
