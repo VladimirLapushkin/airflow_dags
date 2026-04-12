@@ -325,7 +325,7 @@ with DAG(
             "--prod-prefix", "prod/",
             "--tracking-uri", MLFLOW_TRACKING_URI,
             "--model-name", MLFLOW_MODEL_NAME,
-            "--promote-margin", "{{ dag_run.conf.get('promote_margin', '0.0') }}",
+            "--promote-margin", "0.0"
         ],
         properties={
             "spark.submit.deployMode": "cluster",
