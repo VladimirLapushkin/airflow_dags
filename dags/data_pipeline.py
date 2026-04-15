@@ -48,6 +48,10 @@ DP_SECURITY_GROUP_ID = Variable.get("DP_SECURITY_GROUP_ID")
 MLFLOW_TRACKING_URI = Variable.get("MLFLOW_TRACKING_URI")
 MLFLOW_EXPERIMENT_NAME = "correct_ipc"
 
+# Training Setting
+TRAINING_LAST_MONTH = Variable.get("TRAINING_LAST_MONTH")
+TRAINING_NUM_MONTH = Variable.get("TRAINING_NUM_MONTH")
+
 # Создание подключения для Object Storage
 YC_S3_CONNECTION = Connection(
     conn_id="yc-s3",
@@ -162,42 +166,43 @@ with DAG(
     cluster_id_tmpl = "{{ ti.xcom_pull(task_ids='spark-cluster-create-task', key='cluster_id') }}"
 
 
-
-    #Pyspark prepare dataset
-    # etl_job = DataprocCreatePysparkJobOperator(
-    #     cluster_id=cluster_id_tmpl,
-    #     task_id="clean",
-    #     main_python_file_uri=f"{S3_SRC_BUCKET}/data_prep.py",
-    #     connection_id=YC_SA_CONNECTION.conn_id,
-    #     args=[
-    #         "--s3-endpoint", S3_ENDPOINT_URL,
-    #         "--ipc-access-key", S3_IPC_ACCESS_KEY,
-    #         "--ipc-secret-key", S3_IPC_SECRET_KEY,
-    #         "--bucket", "ipc",
-    #         "--pub-prefix", "data/pub/",
-    #         "--lst-prefix", "data/lst/",
-    #         "--start-code", "202603",
-    #         "--months", "10",
-    #         "--output-prefix", "dataprep/"
-    #     ],
-        
-    #     properties={
-    #         "spark.submit.deployMode": "cluster",
-    #         "spark.yarn.dist.archives": f"{S3_VENV_ARCHIVE}#.venv",
-    #         "spark.yarn.appMasterEnv.PYSPARK_PYTHON": "./.venv/bin/python",
-    #         "spark.yarn.appMasterEnv.PYSPARK_DRIVER_PYTHON": "./.venv/bin/python",
-    #         "spark.executorEnv.PYSPARK_PYTHON": "./.venv/bin/python",
-    #         "spark.pyspark.python": "./.venv/bin/python",
-    #         "spark.pyspark.driver.python": "./.venv/bin/python",
-            
-
-    #     },
-    # )
     TRAIN_BUCKET="ipc"
     PROD_BUCKET="ipc"
-    INPUT_KEY="dataprep/ipc_with_ai_202603_last_10.parquet"
+    INPUT_KEY_PREFIX="dataprep/ipc_with_ai_"
     TRAIN_MODELS_PREFIX="models/correct_ipc_v1_reg/"
     MLFLOW_MODEL_NAME="correct_ipc_v1_reg"
+
+    #Pyspark prepare dataset
+    etl_job = DataprocCreatePysparkJobOperator(
+        cluster_id=cluster_id_tmpl,
+        task_id="prep_ipc",
+        main_python_file_uri=f"{S3_SRC_BUCKET}/data_prep.py",
+        connection_id=YC_SA_CONNECTION.conn_id,
+        args=[
+            "--s3-endpoint", S3_ENDPOINT_URL,
+            "--ipc-access-key", S3_IPC_ACCESS_KEY,
+            "--ipc-secret-key", S3_IPC_SECRET_KEY,
+            "--bucket", TRAIN_BUCKET,
+            "--pub-prefix", "pub/",
+            "--lst-prefix", "lst/",
+            "--output-prefix", "dataprep/",
+            "--training-last-month", TRAINING_LAST_MONTH,
+            "--months", str(TRAINING_NUM_MONTH),
+        ],
+        
+        properties={
+            "spark.submit.deployMode": "cluster",
+            "spark.yarn.dist.archives": f"{S3_VENV_ARCHIVE}#.venv",
+            "spark.yarn.appMasterEnv.PYSPARK_PYTHON": "./.venv/bin/python",
+            "spark.yarn.appMasterEnv.PYSPARK_DRIVER_PYTHON": "./.venv/bin/python",
+            "spark.executorEnv.PYSPARK_PYTHON": "./.venv/bin/python",
+            "spark.pyspark.python": "./.venv/bin/python",
+            "spark.pyspark.driver.python": "./.venv/bin/python",
+            
+
+        },
+    )
+
     
     train_v1_reg_base = DataprocCreatePysparkJobOperator(
         task_id="train_v1_reg_base",
@@ -205,18 +210,20 @@ with DAG(
         connection_id=YC_SA_CONNECTION.conn_id,
         main_python_file_uri=f"{S3_SRC_BUCKET}/train_one_model.py",
         args=[
-            "--s3-endpoint", S3_ENDPOINT_URL,
-            "--ipc-access-key", S3_IPC_ACCESS_KEY,
-            "--ipc-secret-key", S3_IPC_SECRET_KEY,
-            "--bucket", TRAIN_BUCKET,
-            "--input-key", INPUT_KEY,
-            "--models-prefix", TRAIN_MODELS_PREFIX,
-            "--candidate-name", "v1_reg_base",
-            "--tracking-uri", MLFLOW_TRACKING_URI,
-            "--experiment-name", MLFLOW_EXPERIMENT_NAME,
-            "--model-name", MLFLOW_MODEL_NAME,
-            "--auto-register",
-        ],
+                "--s3-endpoint", S3_ENDPOINT_URL,
+                "--ipc-access-key", S3_IPC_ACCESS_KEY,
+                "--ipc-secret-key", S3_IPC_SECRET_KEY,
+                "--bucket", TRAIN_BUCKET,
+                "--output-prefix", "dataprep/",
+                "--models-prefix", TRAIN_MODELS_PREFIX,
+                "--training-last-month", TRAINING_LAST_MONTH,
+                "--months", str(TRAINING_NUM_MONTH),
+                "--candidate-name", "v1_reg_base",
+                "--tracking-uri", MLFLOW_TRACKING_URI,
+                "--experiment-name", "correct_ipc_v1",
+                "--model-name", MLFLOW_MODEL_NAME,
+                "--auto-register",
+            ],
         properties={
             "spark.submit.deployMode": "cluster",
             "spark.yarn.dist.archives": f"{S3_VENV_ARCHIVE}#.venv",
@@ -241,19 +248,22 @@ with DAG(
         cluster_id=cluster_id_tmpl,
         connection_id=YC_SA_CONNECTION.conn_id,
         main_python_file_uri=f"{S3_SRC_BUCKET}/train_one_model.py",
+
         args=[
-            "--s3-endpoint", S3_ENDPOINT_URL,
-            "--ipc-access-key", S3_IPC_ACCESS_KEY,
-            "--ipc-secret-key", S3_IPC_SECRET_KEY,
-            "--bucket", TRAIN_BUCKET,
-            "--input-key", INPUT_KEY,
-            "--models-prefix", TRAIN_MODELS_PREFIX,
-            "--candidate-name", "v1_reg_shallow",
-            "--tracking-uri", MLFLOW_TRACKING_URI,
-            "--experiment-name", MLFLOW_EXPERIMENT_NAME,
-            "--model-name", MLFLOW_MODEL_NAME,
-            "--auto-register",
-        ],
+                "--s3-endpoint", S3_ENDPOINT_URL,
+                "--ipc-access-key", S3_IPC_ACCESS_KEY,
+                "--ipc-secret-key", S3_IPC_SECRET_KEY,
+                "--bucket", TRAIN_BUCKET,
+                "--output-prefix", "dataprep/",
+                "--models-prefix", TRAIN_MODELS_PREFIX,
+                "--training-last-month", TRAINING_LAST_MONTH,
+                "--months", str(TRAINING_NUM_MONTH),
+                "--candidate-name", "v1_reg_base",
+                "--tracking-uri", MLFLOW_TRACKING_URI,
+                "--experiment-name", "correct_ipc_v1",
+                "--model-name", MLFLOW_MODEL_NAME,
+                "--auto-register",
+            ],
         properties={
             "spark.submit.deployMode": "cluster",
             "spark.yarn.dist.archives": f"{S3_VENV_ARCHIVE}#.venv",
@@ -283,11 +293,13 @@ with DAG(
             "--ipc-access-key", S3_IPC_ACCESS_KEY,
             "--ipc-secret-key", S3_IPC_SECRET_KEY,
             "--bucket", TRAIN_BUCKET,
-            "--input-key", INPUT_KEY,
+            "--output-prefix", "dataprep/",
             "--models-prefix", TRAIN_MODELS_PREFIX,
-            "--candidate-name", "v1_reg_no_ipc_parts",
+            "--training-last-month", TRAINING_LAST_MONTH,
+            "--months", str(TRAINING_NUM_MONTH),
+            "--candidate-name", "v1_reg_base",
             "--tracking-uri", MLFLOW_TRACKING_URI,
-            "--experiment-name", MLFLOW_EXPERIMENT_NAME,
+            "--experiment-name", "correct_ipc_v1",
             "--model-name", MLFLOW_MODEL_NAME,
             "--auto-register",
         ],
@@ -345,42 +357,6 @@ with DAG(
 
         },
     )
-    
-       
-    # Train
-    # train_job = DataprocCreatePysparkJobOperator(
-    #     cluster_id=cluster_id_tmpl,
-    #     task_id="train",
-    #     main_python_file_uri=f"{S3_SRC_BUCKET}/train_correct_ipc_v1.py",
-    #     connection_id=YC_SA_CONNECTION.conn_id,
-    #     dag=dag,
-    #     args=[
-    #         "--s3-endpoint", S3_ENDPOINT_URL,
-    #         "--ipc-access-key", S3_IPC_ACCESS_KEY,
-    #         "--ipc-secret-key", S3_IPC_SECRET_KEY,
-    #         "--bucket", "ipc",
-    #         "--input-key", "dataprep/ipc_with_ai_202603_last_10.parquet",
-    #         "--models-prefix", "models/correct_ipc_v1_reg/",
-    #     ],
-    
-    #     properties={
-    #         "spark.submit.deployMode": "cluster",
-    #         "spark.yarn.dist.archives": f"{S3_VENV_ARCHIVE}#.venv",
-    #         "spark.yarn.appMasterEnv.PYSPARK_PYTHON": "./.venv/bin/python",
-    #         "spark.yarn.appMasterEnv.PYSPARK_DRIVER_PYTHON": "./.venv/bin/python",
-    #         "spark.executorEnv.PYSPARK_PYTHON": "./.venv/bin/python",
-    #         "spark.pyspark.python": "./.venv/bin/python",
-    #         "spark.pyspark.driver.python": "./.venv/bin/python",
-
-    #         "spark.dynamicAllocation.enabled": "false",
-    #         "spark.executor.instances": "9",
-    #         "spark.executor.cores": "2",
-    #         "spark.executor.memory": "6g",
-    #         "spark.driver.memory": "4g",
-    #         "spark.sql.shuffle.partitions": "96",
-
-    #     },
-    # )
 
     # Удаление Dataproc кластера
     delete_spark_cluster = DataprocDeleteClusterOperator(
