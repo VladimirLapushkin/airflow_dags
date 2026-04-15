@@ -173,7 +173,7 @@ with DAG(
     MLFLOW_MODEL_NAME="correct_ipc_v1_reg"
 
     #Pyspark prepare dataset
-    etl_job = DataprocCreatePysparkJobOperator(
+    prep_ipc = DataprocCreatePysparkJobOperator(
         cluster_id=cluster_id_tmpl,
         task_id="prep_ipc",
         main_python_file_uri=f"{S3_SRC_BUCKET}/data_prep.py",
@@ -370,7 +370,7 @@ with DAG(
     #setup_connections >> create_spark_cluster >> etl_job #>> delete_spark_cluster
     #setup_connections >> create_spark_cluster >> train_job # >> delete_spark_cluster
     #setup_connections >> create_spark_cluster >>  etl_job >> train_job  >> delete_spark_cluster
-    setup_connections >> create_spark_cluster >> train_v1_reg_base >> train_v1_reg_shallow >> train_v1_reg_no_ipc_parts >> select_champion #>> delete_spark_cluster
+    setup_connections >> create_spark_cluster >>  prep_ipc >> train_v1_reg_base >> train_v1_reg_shallow >> train_v1_reg_no_ipc_parts >> select_champion #>> delete_spark_cluster
     # start >> create_cluster >> data_prep
     # data_prep >> [train_v1_reg_base, train_v1_reg_shallow, train_v1_reg_no_ipc_parts]
     # [train_v1_reg_base, train_v1_reg_shallow, train_v1_reg_no_ipc_parts] >> select_champion
