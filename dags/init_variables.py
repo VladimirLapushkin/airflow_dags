@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 
 import boto3
 import botocore
@@ -8,17 +9,25 @@ import yandexcloud
 from airflow.configuration import conf
 from airflow.decorators import dag, task
 from airflow.models import Variable
+from airflow.sensors.time_delta import TimeDeltaSensor
 from pendulum import datetime
 
 
 @dag(
     dag_id="init_variables_from_object_storage",
     start_date=datetime(2026, 4, 1),
-    schedule=None,
+    schedule="@once",
     catchup=False,
+    max_active_runs=1,
     tags=["bootstrap", "variables"],
 )
 def init_variables_from_object_storage():
+
+    wait_5_minutes = TimeDeltaSensor(
+        task_id="wait_5_minutes_before_load",
+        delta=timedelta(minutes=5),
+        mode="reschedule",
+    )
 
     @task
     def load_variables():
@@ -62,7 +71,7 @@ def init_variables_from_object_storage():
 
         return {"loaded": loaded, "bucket": bucket, "key": key}
 
-    load_variables()
+    wait_5_minutes >> load_variables()
 
 
 dag = init_variables_from_object_storage()
