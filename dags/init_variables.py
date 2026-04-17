@@ -16,7 +16,7 @@ from pendulum import datetime
 @dag(
     dag_id="init_variables_from_object_storage",
     start_date=datetime(2026, 4, 1),
-    schedule="@once",
+    schedule=None,
     catchup=False,
     max_active_runs=1,
     tags=["bootstrap", "variables"],
